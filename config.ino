@@ -22,7 +22,7 @@ char message_buff[2048];                //Размер буфера для пр�
 
 IPAddress mqtt_server(192, 168, 1, 31);     //Первый сервер MQTT
 IPAddress mqtt_server2(95, 174, 107, 100);  //Второй сервер MQTT
-//String mqtt_server = "zbx.eff-t.ru";
+//String mqtt_server = "iot.eff-t.ru";
 int mqtt_port = 1883;                       //Порт MQTT сервера
 
 unsigned long currentTime;    //Переменная для преобразования времени работы модуля
