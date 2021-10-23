@@ -37,6 +37,7 @@ int mqtt_port = 1883;                       //Порт MQTT сервера
 unsigned long currentTime;    //Переменная для преобразования времени работы модуля
 unsigned long currentUtimeReport;
 int err_conn = 0;             //Счетчик ошибок подключения к MQTT серверу
+int count=0;
 
 float oldH ;        //Предыдущее значение влажности
 float oldT ;        //Предыдущее значение температуры
@@ -105,6 +106,14 @@ void sendTemperature() {
 
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
+    while(count<7){
+      digitalWrite(LEDPIN, LOW);
+      delay(40);
+      digitalWrite(LEDPIN, HIGH);
+      delay(50);
+      count++;
+    }
+    count=0;
     return;
   }
   String payload = "{\"id\":\"";
