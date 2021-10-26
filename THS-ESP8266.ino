@@ -5,6 +5,7 @@
 #include "DHT.h"
 #include <ESP8266WiFi.h>
 #include <config.h>
+
 //------------------------------------------------------------------------
 
 bool debug = false;  //Отображение отладочной информации в серийный порт
@@ -13,7 +14,7 @@ bool debug = false;  //Отображение отладочной информ�
 #define RELAYPIN D8           // Пин подключения реле
 #define LEDPIN D9             // Пин подключения светодиода
 #define DHTTYPE DHT11         // DHT 22  (AM2302) Тип датчика влажности
-#define REPORT_INTERVAL 30000 // Интервал отправки данных брокеру
+#define REPORT_INTERVAL 3000 // Интервал отправки данных брокеру
 #define BUFFER_SIZE 200       // Размер буфера для получения сообщения 
 #define PinPhoto A0           // Аналоговый вход
 
@@ -38,9 +39,12 @@ unsigned long currentTime;    //Переменная для преобразов
 unsigned long currentUtimeReport;
 int err_conn = 0;             //Счетчик ошибок подключения к MQTT серверу
 int count=0;
+int avg_count=1;
 
-float oldH ;        //Предыдущее значение влажности
-float oldT ;        //Предыдущее значение температуры
+float oldH;        //Предыдущее значение влажности
+float oldT;        //Предыдущее значение температуры
+float temp_avg;    //Среднее значение температуры
+float humy_avg;    //Среднее значение влажности
 String clientName;  //Имя клиента
 //========================================================================
 
@@ -53,6 +57,9 @@ PubSubClient client(wifiClient);
 
 void setup() {
   Serial.begin(115200);
+  
+  Serial.println();
+  Serial.println();
   Serial.println("Start system!");
   delay(20);
 
@@ -62,8 +69,6 @@ void setup() {
   pinMode(LEDPIN, OUTPUT);
   digitalWrite(LEDPIN, HIGH);
 
-  Serial.println();
-  Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
@@ -104,8 +109,37 @@ void sendTemperature() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
 
+  if (avg_count!=11){
+    temp_avg+=t;
+    humy_avg+=h;
+    if (debug){
+    Serial.print(avg_count);
+    Serial.print(" измерений: ");
+    Serial.print(t);
+    Serial.print(" - ");
+    Serial.print(temp_avg);
+    Serial.print(" C; ");
+    Serial.print(h);
+    Serial.print(" - ");
+    Serial.print(humy_avg);
+    Serial.println(" %");
+    }
+    avg_count++;
+  }  
+  else{
+    avg_count-=1;
+    temp_avg/=avg_count;
+    humy_avg/=avg_count;
+    Serial.print("Средние дначени за 10 измерений: ");
+    Serial.print(temp_avg);
+    Serial.print(" C; ");
+    Serial.print(humy_avg);
+    Serial.println(" %");
+
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
+    Serial.println(t);
+    Serial.println(h);
     while(count<7){
       digitalWrite(LEDPIN, LOW);
       delay(40);
@@ -121,14 +155,14 @@ void sendTemperature() {
   payload += "\",\"uptime\":\"";
   payload += uptime();
   payload += "\",\"humi\":\"";
-  payload += h;
+  payload += humy_avg;
   payload += "\",\"temp\":\"";
-  payload += t;
+  payload += temp_avg;
   payload += "\",\"light\":\"";
   payload += analogRead(PinPhoto);
   payload += "\"}";
 
-  if (t != oldT || h != oldH )
+  if (temp_avg != oldT || humy_avg != oldH )
   {
     if (client.connected()) {
       Serial.print("Client connected OK! ");
@@ -143,26 +177,16 @@ void sendTemperature() {
         Serial.println("Publish failed");
       }
     }
-    oldT = t;
-    oldH = h;
+    oldT = temp_avg;
+    oldH = humy_avg;
   }
   else {
-    Serial.println("Нет новых данных для отправки");
+    Serial.println("нет новых данных для отправки");
   }
 
-  if (debug) {
-    String debug_payload = "{\"Client\":\"";
-    debug_payload += clientName;
-    debug_payload += "\",\"Millis\": \"";
-    debug_payload += uptime();
-    debug_payload += "\"}";
-    if (client.publish(debug_topic, (char*) debug_payload.c_str())) {
-      Serial.println(debug_payload);
-    }
-    else
-    {
-      Serial.println("Publish debug - ERROR");
-    }
+    temp_avg=0;
+    humy_avg=0;
+    avg_count=1;
   }
 }
 
