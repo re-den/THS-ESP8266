@@ -3,14 +3,7 @@ void mqtt_connect() { // подключение к MQTT серверу
   client.set_server(mqtt_server, mqtt_port);
   if (client.connect(MQTT::Connect(clientName).set_auth("denisr", "bdcPVN5786"))) {
     subscribeclient();
-    while (count < 2) {
-      digitalWrite(LEDPIN, LOW);
-      delay(120);
-      digitalWrite(LEDPIN, HIGH);
-      delay(50);
-      count++;
-    }
-    count = 0;
+    errLedBlink(5,30,20);
   }
   else {
     err_conn++;
@@ -20,14 +13,7 @@ void mqtt_connect() { // подключение к MQTT серверу
     Serial.println(millis());
     client.set_server(mqtt_server2, mqtt_port);
     if (client.connect(MQTT::Connect(clientName).set_auth("denisr", "bdcPVN5786"))) {
-      while (count < 3) {
-        digitalWrite(LEDPIN, LOW);
-        delay(120);
-        digitalWrite(LEDPIN, HIGH);
-        delay(50);
-        count++;
-      }
-      count = 0;
+    errLedBlink(3,40,50);
       Serial.println("MQTT connect to ");
       Serial.println(mqtt_server2);
     }

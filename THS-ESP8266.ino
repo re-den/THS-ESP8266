@@ -5,6 +5,7 @@
 #include "DHT.h"
 #include <ESP8266WiFi.h>
 #include <config.h>
+#include <GyverFilters.h>
 
 //------------------------------------------------------------------------
 
@@ -38,7 +39,6 @@ int mqtt_port = 1883;                       //Порт MQTT сервера
 unsigned long currentTime;    //Переменная для преобразования времени работы модуля
 unsigned long currentUtimeReport;
 int err_conn = 0;             //Счетчик ошибок подключения к MQTT серверу
-int count=0;
 int avg_count=1;
 
 float oldH;        //Предыдущее значение влажности
@@ -54,6 +54,9 @@ String clientName;  //Имя клиента
 DHT dht(DHTPIN, DHTTYPE);
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
+GKalman lightFilter(20, 20, 1);
+GKalman tempFilter(0.5, 0.5, 1);
+GKalman humiFilter(0.5, 0.5, 1);
 
 void setup() {
   Serial.begin(115200);
@@ -104,65 +107,49 @@ void setup() {
   oldT = -1;
 }
 
+void errLedBlink(int blink, int on_t, int off_t){
+    int count=0;
+    while(count<blink){
+      digitalWrite(LEDPIN, LOW);
+      delay(on_t);
+      digitalWrite(LEDPIN, HIGH);
+      delay(off_t);
+      count++;
+    }
+    return;
+}
+
 void sendTemperature() {
 
   float h = dht.readHumidity();
   float t = dht.readTemperature();
 
-  if (avg_count!=11){
-    temp_avg+=t;
-    humy_avg+=h;
-    if (debug){
-    Serial.print(avg_count);
-    Serial.print(" измерений: ");
-    Serial.print(t);
-    Serial.print(" - ");
-    Serial.print(temp_avg);
-    Serial.print(" C; ");
-    Serial.print(h);
-    Serial.print(" - ");
-    Serial.print(humy_avg);
-    Serial.println(" %");
-    }
-    avg_count++;
-  }  
-  else{
-    avg_count-=1;
-    temp_avg/=avg_count;
-    humy_avg/=avg_count;
-    Serial.print("Средние дначени за 10 измерений: ");
-    Serial.print(temp_avg);
-    Serial.print(" C; ");
-    Serial.print(humy_avg);
-    Serial.println(" %");
-
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
     Serial.println(t);
     Serial.println(h);
-    while(count<7){
-      digitalWrite(LEDPIN, LOW);
-      delay(40);
-      digitalWrite(LEDPIN, HIGH);
-      delay(50);
-      count++;
-    }
-    count=0;
+    errLedBlink(20,40,30);
     return;
   }
+
+  int light = analogRead(PinPhoto);
+  light = lightFilter.filtered((int)light);
+  t = tempFilter.filtered((float)t);
+  h = tempFilter.filtered((float)h);
+
   String payload = "{\"id\":\"";
   payload += clientName;
   payload += "\",\"uptime\":\"";
   payload += uptime();
   payload += "\",\"humi\":\"";
-  payload += humy_avg;
+  payload += h;
   payload += "\",\"temp\":\"";
-  payload += temp_avg;
+  payload += t;
   payload += "\",\"light\":\"";
-  payload += analogRead(PinPhoto);
+  payload += light;
   payload += "\"}";
 
-  if (temp_avg != oldT || humy_avg != oldH )
+  if (t != oldT || h != oldH )
   {
     if (client.connected()) {
       Serial.print("Client connected OK! ");
@@ -177,17 +164,16 @@ void sendTemperature() {
         Serial.println("Publish failed");
       }
     }
-    oldT = temp_avg;
-    oldH = humy_avg;
+    oldT = t;
+    oldH = h;
   }
   else {
-    Serial.println("нет новых данных для отправки");
+    Serial.println("there is no new data to send");
   }
 
     temp_avg=0;
     humy_avg=0;
     avg_count=1;
-  }
 }
 
 String uptime() {
