@@ -55,8 +55,8 @@ DHT dht(DHTPIN, DHTTYPE);
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 GKalman lightFilter(20, 20, 1);
-GKalman tempFilter(0.5, 0.5, 1);
-GKalman humiFilter(0.5, 0.5, 1);
+GKalman tempFilter(10, 10, 1);
+GKalman humiFilter(10, 10, 1);
 
 void setup() {
   Serial.begin(115200);
