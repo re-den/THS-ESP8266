@@ -151,15 +151,15 @@ void sendTemperature() {
   payload += "\",\"light\":\"";
   payload += light;
   payload += "\"}";
-  /*
+  
     Serial.print("OLD T: ");
     Serial.print(oldT, 6);
     Serial.print(" ; OLD H: ");
     Serial.println(oldH, 6);
-    Serial.print(" fltrT: ");
+    Serial.print("fltrT: ");
     Serial.print(filteredT, 6);
     Serial.print(" ; fltrH: ");
-    Serial.println(filteredH, 6);*/
+    Serial.println(filteredH, 6);
 
   if (filteredT != oldT || filteredH != oldH)  {
     if (client.connected()) {
