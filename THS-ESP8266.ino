@@ -39,12 +39,11 @@ int mqtt_port = 1883;                       //Порт MQTT сервера
 unsigned long currentTime;    //Переменная для преобразования времени работы модуля
 unsigned long currentUtimeReport;
 int err_conn = 0;             //Счетчик ошибок подключения к MQTT серверу
-int avg_count=1;
 
+float h, filteredH;          //Значение влажности
+float t, filteredT;          //Значение температуры
 float oldH;        //Предыдущее значение влажности
 float oldT;        //Предыдущее значение температуры
-float temp_avg;    //Среднее значение температуры
-float humy_avg;    //Среднее значение влажности
 String clientName;  //Имя клиента
 //========================================================================
 
@@ -55,12 +54,12 @@ DHT dht(DHTPIN, DHTTYPE);
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 GKalman lightFilter(20, 20, 1);
-GKalman tempFilter(10, 10, 1);
-GKalman humiFilter(10, 10, 1);
+GKalman tempFilter(0.2, 0.2, 0.1);
+GKalman humiFilter(2, 2, 1);
 
 void setup() {
   Serial.begin(115200);
-  
+
   Serial.println();
   Serial.println();
   Serial.println("Start system!");
@@ -105,52 +104,64 @@ void setup() {
   dht.begin();
   oldH = -1;
   oldT = -1;
+
+  filteredT = tempFilter.filtered(dht.readTemperature());
+  filteredH = humiFilter.filtered(dht.readHumidity());
 }
 
-void errLedBlink(int blink, int on_t, int off_t){
-    int count=0;
-    while(count<blink){
-      digitalWrite(LEDPIN, LOW);
-      delay(on_t);
-      digitalWrite(LEDPIN, HIGH);
-      delay(off_t);
-      count++;
-    }
-    return;
+void errLedBlink(int blink, int on_t, int off_t) {
+  int count = 0;
+  while (count < blink) {
+    digitalWrite(LEDPIN, LOW);
+    delay(on_t);
+    digitalWrite(LEDPIN, HIGH);
+    delay(off_t);
+    count++;
+  }
+  return;
 }
 
 void sendTemperature() {
 
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-
+  h = dht.readHumidity();
+  t = dht.readTemperature();
+  //   Serial.println(t);
+  //   Serial.println(h);
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
     Serial.println(t);
     Serial.println(h);
-    errLedBlink(20,40,30);
+    errLedBlink(20, 40, 30);
     return;
   }
 
   int light = analogRead(PinPhoto);
   light = lightFilter.filtered((int)light);
-  t = tempFilter.filtered((float)t);
-  h = tempFilter.filtered((float)h);
+  filteredT = round(tempFilter.filtered(t) * 100) / 100;
+  filteredH = round(humiFilter.filtered(h) * 100) / 100;
 
   String payload = "{\"id\":\"";
   payload += clientName;
   payload += "\",\"uptime\":\"";
   payload += uptime();
   payload += "\",\"humi\":\"";
-  payload += h;
+  payload += filteredH;
   payload += "\",\"temp\":\"";
-  payload += t;
+  payload += filteredT;
   payload += "\",\"light\":\"";
   payload += light;
   payload += "\"}";
+  /*
+    Serial.print("OLD T: ");
+    Serial.print(oldT, 6);
+    Serial.print(" ; OLD H: ");
+    Serial.println(oldH, 6);
+    Serial.print(" fltrT: ");
+    Serial.print(filteredT, 6);
+    Serial.print(" ; fltrH: ");
+    Serial.println(filteredH, 6);*/
 
-  if (t != oldT || h != oldH )
-  {
+  if (filteredT != oldT || filteredH != oldH)  {
     if (client.connected()) {
       Serial.print("Client connected OK! ");
 
@@ -164,16 +175,13 @@ void sendTemperature() {
         Serial.println("Publish failed");
       }
     }
-    oldT = t;
-    oldH = h;
+    oldT = filteredT;
+    oldH = filteredH;
   }
   else {
     Serial.println("there is no new data to send");
   }
-
-    temp_avg=0;
-    humy_avg=0;
-    avg_count=1;
+  Serial.println("--------------- End data send----------------");
 }
 
 String uptime() {
@@ -263,19 +271,19 @@ void loop() {
       sendTemperature();
       //Serial.println("Отправка прошла в " + uptime());
     }
-/*
-    if (millis() - currentUtimeReport > UPTIME_REPORT_INTERVAL) // Если время контроллера millis, больше переменной на UPTIME_REPORT_INTERVAL, то запускаем условие if
-    {
-      currentUtimeReport = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через UPTIME_REPORT_INTERVAL опять сработал наш цикл.
-      String payload = "{\"id\":";
-      payload += clientName;
-      payload += ",\"uptime\":";
-      payload += uptime();
-      payload += "\"}";
-      if (!client.publish(topic, (char*) payload.c_str())) {
-        Serial.println("Publish failed");
-      }
-    }*/
+    /*
+        if (millis() - currentUtimeReport > UPTIME_REPORT_INTERVAL) // Если время контроллера millis, больше переменной на UPTIME_REPORT_INTERVAL, то запускаем условие if
+        {
+          currentUtimeReport = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через UPTIME_REPORT_INTERVAL опять сработал наш цикл.
+          String payload = "{\"id\":";
+          payload += clientName;
+          payload += ",\"uptime\":";
+          payload += uptime();
+          payload += "\"}";
+          if (!client.publish(topic, (char*) payload.c_str())) {
+            Serial.println("Publish failed");
+          }
+        }*/
     client.loop();
   }
   else {

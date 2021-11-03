@@ -10,7 +10,8 @@ void mqtt_connect() { // подключение к MQTT серверу
     Serial.println("MQTT connect failed");
     Serial.println("Will reset and try again...");
     Serial.println(err_conn);
-    Serial.println(millis());
+    Serial.print(millis());
+    Serial.println(" ms");
     client.set_server(mqtt_server2, mqtt_port);
     if (client.connect(MQTT::Connect(clientName).set_auth("denisr", "bdcPVN5786"))) {
     errLedBlink(3,40,50);
