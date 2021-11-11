@@ -11,10 +11,9 @@
 
 bool debug = false;  //Отображение отладочной информации в серийный порт
 
-#define DHTPIN D7             // Пин подключения датчика влажности и температуры
-#define RELAYPIN D8           // Пин подключения реле
-#define LEDPIN D9             // Пин подключения светодиода
-#define DHTTYPE DHT11         // DHT 22  (AM2302) Тип датчика влажности
+#define DHTPIN 0             // Пин подключения датчика влажности и температуры
+#define RELAYPIN 1           // Пин подключения реле
+#define DHTTYPE DHT22         // DHT 22  (AM2302) Тип датчика влажности
 #define REPORT_INTERVAL 30000 // Интервал отправки данных брокеру
 #define BUFFER_SIZE 200       // Размер буфера для получения сообщения 
 #define PinPhoto A0           // Аналоговый вход
@@ -22,8 +21,6 @@ bool debug = false;  //Отображение отладочной информ�
 const char* ssid = "Password";        //Имя WIFI сети
 const char* password = "bdcPVN5786";  //Пароль WIFI
 const char* device1 = "Switch1";      //Имя управляемого устройства №1
-const char* device2 = "Switch2";      //Имя управляемого устройства №2
-const char* device3 = "Switch3";      //Имя управляемого устройства №3
 
 String topic = "/sensors/dht";                   //Топик для отправки
 String debug_topic = "/debug";        //Топик отладочной информации
@@ -40,8 +37,8 @@ unsigned long currentTime;    //Переменная для преобразов
 unsigned long currentUtimeReport;
 int err_conn = 0;             //Счетчик ошибок подключения к MQTT серверу
 
-float h, filteredH;          //Значение влажности
-float t, filteredT;          //Значение температуры
+float h, filteredH;          //Значение влажности, фильтрованное значение влажности
+float t, filteredT;          //Значение температуры, фильтрованное значение температуры
 float oldH;        //Предыдущее значение влажности
 float oldT;        //Предыдущее значение температуры
 String clientName;  //Имя клиента
@@ -68,8 +65,6 @@ void setup() {
   Serial.println("Initialization Relay PIN");
   pinMode(RELAYPIN, OUTPUT);
   digitalWrite(RELAYPIN, HIGH);
-  pinMode(LEDPIN, OUTPUT);
-  digitalWrite(LEDPIN, HIGH);
 
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -86,12 +81,10 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  clientName += "esp8266-";
+  clientName += "esp01-";
   uint8_t mac[6];
   WiFi.macAddress(mac);
   clientName += macToStr(mac);
-  //clientName += "-";
-  //clientName += String(micros() & 0xff, 16);
 
   Serial.print("Connecting to ");
   Serial.print(mqtt_server);
@@ -109,16 +102,20 @@ void setup() {
   filteredH = humiFilter.filtered(dht.readHumidity());
 }
 
-void errLedBlink(int blink, int on_t, int off_t) {
-  int count = 0;
-  while (count < blink) {
-    digitalWrite(LEDPIN, LOW);
-    delay(on_t);
-    digitalWrite(LEDPIN, HIGH);
-    delay(off_t);
-    count++;
+void loop() {
+  if (client.connected()) {
+    if (millis() - currentTime > REPORT_INTERVAL) // Если время контроллера millis, больше переменной на REPORT_INTERVAL, то запускаем условие if
+    {
+      currentTime = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через REPORT_INTERVAL опять сработал наш цикл.
+      sendTemperature();
+    client.loop();
   }
-  return;
+  else {
+    while (!client.connected()) {
+      mqtt_connect();
+    }
+  }
+ }
 }
 
 void sendTemperature() {
@@ -131,12 +128,9 @@ void sendTemperature() {
     Serial.println("Failed to read from DHT sensor!");
     Serial.println(t);
     Serial.println(h);
-    errLedBlink(20, 40, 30);
     return;
   }
 
-  int light = analogRead(PinPhoto);
-  light = lightFilter.filtered((int)light);
   filteredT = round(tempFilter.filtered(t) * 100) / 100;
   filteredH = round(humiFilter.filtered(h) * 100) / 100;
 
@@ -148,8 +142,6 @@ void sendTemperature() {
   payload += filteredH;
   payload += "\",\"temp\":\"";
   payload += filteredT;
-  payload += "\",\"light\":\"";
-  payload += light;
   payload += "\"}";
   
     Serial.print("OLD T: ");
@@ -221,25 +213,7 @@ void callback(const MQTT::Publish & pub) {
       bool value = doc["value"]; // true|false
 
       if (strcmp (device_name, device1) == 0) {
-        if (value) {
-          digitalWrite(RELAYPIN, LOW);
-        }
-        else {
-          digitalWrite(RELAYPIN, HIGH);
-        }
-        Serial.print(device_name);
-        Serial.print(" - is ");
-        Serial.println(value);
-      }
-      if (strcmp (device_name, device2) == 0) {
-        // код действия для Switch2
-
-
-      }
-
-      if (strcmp (device_name, device3) == 0) {
         debug = value;
-        digitalWrite(LEDPIN, ((value == false) ? HIGH : LOW));
         Serial.println((value == true) ? "ОТЛАДКА ВКЛЮЧЕНА" : "ОТЛАДКА ОТКЛЮЧЕНА");
       }
     }
@@ -260,35 +234,4 @@ String macToStr(const uint8_t* mac)
       result += ':';
   }
   return result;
-}
-
-void loop() {
-
-  if (client.connected()) {
-    if (millis() - currentTime > REPORT_INTERVAL) // Если время контроллера millis, больше переменной на REPORT_INTERVAL, то запускаем условие if
-    {
-      currentTime = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через REPORT_INTERVAL опять сработал наш цикл.
-      sendTemperature();
-      //Serial.println("Отправка прошла в " + uptime());
-    }
-    /*
-        if (millis() - currentUtimeReport > UPTIME_REPORT_INTERVAL) // Если время контроллера millis, больше переменной на UPTIME_REPORT_INTERVAL, то запускаем условие if
-        {
-          currentUtimeReport = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через UPTIME_REPORT_INTERVAL опять сработал наш цикл.
-          String payload = "{\"id\":";
-          payload += clientName;
-          payload += ",\"uptime\":";
-          payload += uptime();
-          payload += "\"}";
-          if (!client.publish(topic, (char*) payload.c_str())) {
-            Serial.println("Publish failed");
-          }
-        }*/
-    client.loop();
-  }
-  else {
-    while (!client.connected()) {
-      mqtt_connect();
-    }
-  }
 }
