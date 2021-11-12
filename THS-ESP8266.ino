@@ -109,6 +109,23 @@ void setup() {
   filteredH = humiFilter.filtered(dht.readHumidity());
 }
 
+void loop() {
+
+  if (client.connected()) {
+    if (millis() - currentTime > REPORT_INTERVAL) // Если время контроллера millis, больше переменной на REPORT_INTERVAL, то запускаем условие if
+    {
+      currentTime = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через REPORT_INTERVAL опять сработал наш цикл.
+      sendTemperature();
+    }
+    client.loop();
+  }
+  else {
+    while (!client.connected()) {
+      mqtt_connect();
+    }
+  }
+}
+
 void errLedBlink(int blink, int on_t, int off_t) {
   int count = 0;
   while (count < blink) {
@@ -125,8 +142,6 @@ void sendTemperature() {
 
   h = dht.readHumidity();
   t = dht.readTemperature();
-  //   Serial.println(t);
-  //   Serial.println(h);
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
     Serial.println(t);
@@ -260,35 +275,4 @@ String macToStr(const uint8_t* mac)
       result += ':';
   }
   return result;
-}
-
-void loop() {
-
-  if (client.connected()) {
-    if (millis() - currentTime > REPORT_INTERVAL) // Если время контроллера millis, больше переменной на REPORT_INTERVAL, то запускаем условие if
-    {
-      currentTime = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через REPORT_INTERVAL опять сработал наш цикл.
-      sendTemperature();
-      //Serial.println("Отправка прошла в " + uptime());
-    }
-    /*
-        if (millis() - currentUtimeReport > UPTIME_REPORT_INTERVAL) // Если время контроллера millis, больше переменной на UPTIME_REPORT_INTERVAL, то запускаем условие if
-        {
-          currentUtimeReport = millis();        // Приравниваем переменную текущего времени к времени контроллера, чтобы через UPTIME_REPORT_INTERVAL опять сработал наш цикл.
-          String payload = "{\"id\":";
-          payload += clientName;
-          payload += ",\"uptime\":";
-          payload += uptime();
-          payload += "\"}";
-          if (!client.publish(topic, (char*) payload.c_str())) {
-            Serial.println("Publish failed");
-          }
-        }*/
-    client.loop();
-  }
-  else {
-    while (!client.connected()) {
-      mqtt_connect();
-    }
-  }
 }
