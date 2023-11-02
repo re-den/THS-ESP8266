@@ -20,7 +20,7 @@ bool debug = false;  //Отображение отладочной информ�
 #define PinPhoto A0           // Аналоговый вход
 
 const char* ssid = "Password";        //Имя WIFI сети
-const char* password = "bdcPVN5786";  //Пароль WIFI
+const char* password = "12345678";    //Пароль WIFI
 const char* device1 = "Switch1";      //Имя управляемого устройства №1
 const char* device2 = "Switch2";      //Имя управляемого устройства №2
 const char* device3 = "Switch3";      //Имя управляемого устройства №3
